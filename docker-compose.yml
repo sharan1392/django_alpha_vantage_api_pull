@@ -1,0 +1,40 @@
+version: '3'
+
+services:
+  djangoapp:
+    build: .
+    command: >
+      sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000" # Set to access 0.0.0.0:8000 from anywhere
+    ports:
+      - 8000:8000
+    depends_on:
+      - db
+
+  redis:
+    image: redis
+
+  db:
+    image: postgres
+    environment:
+      - POSTGRES_HOST_AUTH_METHOD=trust
+
+  celery:
+    restart: always
+    build:
+      context: .
+    image: celery
+    command: celery -A price worker --loglevel=info --pool=solo
+    depends_on:
+      - db
+      - redis
+      - djangoapp
+
+  celery-beat:
+    depends_on:
+      - db
+      - redis
+      - djangoapp
+      - celery
+    build:
+      context: .
+    command: celery -A price beat --loglevel=debug --scheduler django_celery_beat.schedulers:DatabaseScheduler
